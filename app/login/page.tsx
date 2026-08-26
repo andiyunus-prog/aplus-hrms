@@ -20,13 +20,13 @@ export default async function LoginPage({
 
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700" htmlFor="username">
-              Email
+              Username or Email
             </label>
             <input
               className="rounded-md px-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
               name="email"
-              type="email"
-              placeholder="owner@aplushrms.com"
+              type="text"
+              placeholder="username"
               required
             />
           </div>
