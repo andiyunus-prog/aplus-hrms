@@ -157,10 +157,40 @@ export async function deleteEmployee(formData: FormData) {
   const id = formData.get('id') as string
 
   if (!id) return
-  
-  // Use adminSupabase to delete the employee row without RLS blocks
-  const { error } = await adminSupabase.from('employees').delete().eq('id', id)
-  if (error) console.error('Error deleting employee:', error.message)
+
+  // 1. Fetch the employee row first to get their linked auth_user_id
+  const { data: employee, error: fetchError } = await adminSupabase
+    .from('employees')
+    .select('auth_user_id')
+    .eq('id', id)
+    .single()
+
+  if (fetchError) {
+    console.error('Error fetching employee for deletion:', fetchError.message)
+    return
+  }
+
+  // 2. If the employee has a linked Supabase Auth user, delete it from auth.users
+  if (employee?.auth_user_id) {
+    const { error: authDeleteError } = await adminSupabase.auth.admin.deleteUser(
+      employee.auth_user_id
+    )
+
+    if (authDeleteError) {
+      console.error('Error deleting auth user:', authDeleteError.message)
+    }
+  }
+
+  // 3. Delete the employee record from the database table
+  const { error: dbDeleteError } = await adminSupabase
+    .from('employees')
+    .delete()
+    .eq('id', id)
+
+  if (dbDeleteError) {
+    console.error('Error deleting employee row:', dbDeleteError.message)
+    return
+  }
 
   revalidatePath('/dashboard/employees')
 }
