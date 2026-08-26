@@ -18,6 +18,9 @@ export default async function DashboardLayout({
   const userRole = await getCurrentUserRole()
   const isOwnerOrAdmin = userRole === 'OWNER' || userRole === 'ADMIN'
   const canAccessAttendance = isOwnerOrAdmin || userRole === 'HRD'
+  
+  // Define if the user is a regular employee (not owner, admin, or hrd)
+  const isRegularEmployee = !isOwnerOrAdmin && userRole !== 'HRD'
 
   async function signOut() {
     'use server'
@@ -34,56 +37,71 @@ export default async function DashboardLayout({
         </div>
         
         <nav className="flex-1 py-6 px-3 space-y-1">
-          <Link 
-            href="/dashboard" 
-            className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
-          >
-            Overview
-          </Link>
-          <Link 
-            href="/dashboard/companies" 
-            className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
-          >
-            Companies
-          </Link>
-          <Link 
-            href="/dashboard/employees" 
-            className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
-          >
-            Employees
-          </Link>
-          <Link 
-            href="/dashboard/leaves" 
-            className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
-          >
-            Leave Requests
-          </Link>
-
-          {/* DISPLAYED FOR OWNER, ADMIN, AND HRD */}
-          {canAccessAttendance && (
-            <Link 
-              href="/dashboard/attendance/lateness" 
-              className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
-            >
-              Attendance Lateness
-            </Link>
-          )}
-
-          {/* DISPLAYED ONLY FOR OWNER / ADMIN */}
-          {isOwnerOrAdmin && (
+          {isRegularEmployee ? (
+            /* ================= REGULAR EMPLOYEE PORTAL LINKS ================= */
             <>
               <Link 
-                href="/dashboard/payroll" 
+                href="/dashboard/my-profile" 
                 className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
               >
-                Payroll & Payslips
+                My Profile
+              </Link>
+            </>
+          ) : (
+            /* ================= ADMIN / HRD LINKS ================= */
+            <>
+              <Link 
+                href="/dashboard" 
+                className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
+              >
+                Overview
               </Link>
               <Link 
-                href="/dashboard/loans" 
+                href="/dashboard/companies" 
                 className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
               >
-                Employee Loans
+                Companies
               </Link>
+              <Link 
+                href="/dashboard/employees" 
+                className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
+              >
+                Employees
+              </Link>
+              <Link 
+                href="/dashboard/leaves" 
+                className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
+              >
+                Leave Requests
+              </Link>
+
+              {/* DISPLAYED FOR OWNER, ADMIN, AND HRD */}
+              {canAccessAttendance && (
+                <Link 
+                  href="/dashboard/attendance/lateness" 
+                  className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                >
+                  Attendance Lateness
+                </Link>
+              )}
+
+              {/* DISPLAYED ONLY FOR OWNER / ADMIN */}
+              {isOwnerOrAdmin && (
+                <>
+                  <Link 
+                    href="/dashboard/payroll" 
+                    className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                  >
+                    Payroll & Payslips
+                  </Link>
+                  <Link 
+                    href="/dashboard/loans" 
+                    className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                  >
+                    Employee Loans
+                  </Link>
+                </>
+              )}
             </>
           )}
         </nav>

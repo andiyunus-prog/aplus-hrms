@@ -37,6 +37,7 @@ type Employee = {
   bank_account_name: string | null
   notes: string | null
   status: string
+  auth_user_id?: string | null
   companies?: Company | null
 }
 
@@ -85,8 +86,8 @@ export default function EmployeeTable({
               <th className="px-6 py-3">Code / Name</th>
               <th className="px-6 py-3">Department</th>
               <th className="px-6 py-3">Contact</th>
+              <th className="px-6 py-3">Login Status</th>
               <th className="px-6 py-3">Company</th>
-              <th className="px-6 py-3">Status</th>
               <th className="px-6 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -104,12 +105,18 @@ export default function EmployeeTable({
                     <div className="text-xs text-gray-400">{emp.phone || '-'}</div>
                   </td>
                   <td className="px-6 py-4">
-                    {emp.companies ? (emp.companies.legal_name || emp.companies.name) : '-'}
+                    {emp.auth_user_id ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                        Has Login
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                        No Login
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {emp.employment_status}
-                    </span>
+                    {emp.companies ? (emp.companies.legal_name || emp.companies.name) : '-'}
                   </td>
                   <td className="px-6 py-4 text-right whitespace-nowrap space-x-2">
                     <Link

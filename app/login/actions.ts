@@ -6,11 +6,9 @@ import { createClient } from '../../utils/supabase/server'
 export async function login(formData: FormData) {
   const supabase = await createClient()
 
-  // Get the input value (can be a short username like 'andi' or a full email)
   let emailOrUsername = (formData.get('email') as string)?.trim().toLowerCase()
   const password = formData.get('password') as string
 
-  // If the user did not type an '@', automatically append your system domain
   if (emailOrUsername && !emailOrUsername.includes('@')) {
     emailOrUsername = `${emailOrUsername}@aplusgroup.my.id`
   }
@@ -21,16 +19,37 @@ export async function login(formData: FormData) {
   })
 
   if (error) {
-    // Print the EXACT error from Supabase to your terminal running `npm run dev`
     console.log('--- SUPABASE AUTH ERROR ---')
-    console.log('Status:', error.status)
     console.log('Message:', error.message)
     console.log('---------------------------')
-
-    // Redirect with the REAL error message so you can see it on the page
     redirect(`/login?message=${encodeURIComponent(error.message)}`)
   }
 
-  // On success, redirect to dashboard
-  redirect('/dashboard')
+  const userId = data.user?.id
+
+  // Check the user's role from the profiles and roles tables
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select(`
+      roles (code)
+    `)
+    .eq('id', userId)
+    .single()
+
+  // Safely extract the role code without strict casting errors
+  const rawRoles: any = profile?.roles
+  const roleCode = (
+    Array.isArray(rawRoles) 
+      ? rawRoles[0]?.code 
+      : rawRoles?.code
+  )?.toUpperCase() || ''
+
+  const isAdminOrOwner = ['ADMIN', 'OWNER', 'HRD', 'HR', 'HR_ADMIN'].includes(roleCode)
+
+  // Smart Redirection based on role
+  if (isAdminOrOwner) {
+    redirect('/dashboard') // Admins/Owners go straight to Overview
+  } else {
+    redirect('/dashboard/my-profile') // Regular employees go to their ESS profile
+  }
 }

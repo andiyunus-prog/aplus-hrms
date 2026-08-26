@@ -35,6 +35,7 @@ type Employee = {
   bank_account_name: string | null
   notes: string | null
   status: string
+  auth_user_id?: string | null
 }
 
 export default function EditEmployeeModal({
@@ -62,6 +63,46 @@ export default function EditEmployeeModal({
 
             <form action={async (formData) => { await updateEmployee(formData); setIsOpen(false) }} className="space-y-6">
               <input type="hidden" name="id" value={employee.id} />
+
+              {/* Section 0: System Login */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wider border-b pb-1">System Login Account</h4>
+                <div className="bg-gray-50 p-4 rounded-md border border-gray-200 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      {employee.auth_user_id ? 'Login Status' : 'Create Login Username'}
+                    </label>
+                    {employee.auth_user_id ? (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                        ✓ Active Login Linked
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-800">
+                        ⚠ No Login Account Yet
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      {employee.auth_user_id ? 'Update Username (Optional)' : 'Assign Username'}
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <input 
+                        type="text" 
+                        name="username" 
+                        placeholder={employee.auth_user_id ? "Leave blank to keep" : "e.g. andi"} 
+                        className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-blue-500 bg-white" 
+                      />
+                      <span className="text-xs text-gray-500 whitespace-nowrap">@aplusgroup.my.id</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      {employee.auth_user_id 
+                        ? 'Fill only if you want to change the login handle.' 
+                        : 'Type a username to auto-create their login and default password.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
               {/* Section 1: Employment Details */}
               <div className="space-y-4">
