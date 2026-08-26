@@ -19,7 +19,7 @@ export default async function LoginPage({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700" htmlFor="email">
+            <label className="text-sm font-medium text-gray-700" htmlFor="username">
               Email
             </label>
             <input

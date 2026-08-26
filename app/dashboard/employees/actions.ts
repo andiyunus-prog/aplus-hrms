@@ -2,9 +2,11 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '../../../utils/supabase/server'
+import { createAdminClient } from '../../../utils/supabase/admin' // <-- Imported admin client
 
 export async function createEmployee(formData: FormData) {
   const supabase = await createClient()
+  const adminSupabase = createAdminClient() // <-- Initialized admin client
 
   const company_id = formData.get('company_id') as string
   const employee_code = formData.get('employee_code') as string
@@ -21,7 +23,7 @@ export async function createEmployee(formData: FormData) {
   const email = (formData.get('email') as string) || null
   const phone = (formData.get('phone') as string) || null
   const department = (formData.get('department') as string) || null
-  const job_position = (formData.get('job_position') as string) || null // <-- Added job_position
+  const job_position = (formData.get('job_position') as string) || null
   const nickname = (formData.get('nickname') as string) || null
   const npwp = (formData.get('npwp') as string) || null
   const birth_place = (formData.get('birth_place') as string) || null
@@ -32,18 +34,38 @@ export async function createEmployee(formData: FormData) {
   const bank_account_name = (formData.get('bank_account_name') as string) || null
   const notes = (formData.get('notes') as string) || null
   const status = (formData.get('status') as string) || 'ACTIVE'
+  
+  const initialPassword = formData.get('password') as string // Optional login password from the form
 
   if (!company_id || !employee_code || !full_name || !nik || !gender || !religion || !birth_date || !hire_date || !employment_status || !marital_status) {
     console.error('Missing required employee fields')
     return
   }
 
+  let auth_user_id = null
+
+  // If email and password are provided, automatically generate a Supabase Auth user login for them
+  if (email && initialPassword) {
+    const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
+      email: email,
+      password: initialPassword,
+      email_confirm: true, // Automatically verify their email
+    })
+
+    if (authError) {
+      console.error('Error creating auth user account:', authError.message)
+      // You can choose to return here if account creation fails, or let it proceed without login
+    } else if (authData.user) {
+      auth_user_id = authData.user.id
+    }
+  }
+
   const { error } = await supabase.from('employees').insert([{
     company_id, employee_code, full_name, nik, gender, religion, birth_date,
     hire_date, employment_status, marital_status, email, phone, department,
-    job_position, // <-- Added job_position here
-    nickname, npwp, birth_place, address, emergency_contact_name, 
-    emergency_contact_phone, bank_account, bank_account_name, notes, status
+    job_position, nickname, npwp, birth_place, address, emergency_contact_name, 
+    emergency_contact_phone, bank_account, bank_account_name, notes, status,
+    auth_user_id // <-- Automatically linked matching auth user UUID
   }])
 
   if (error) {
@@ -73,7 +95,7 @@ export async function updateEmployee(formData: FormData) {
   const email = (formData.get('email') as string) || null
   const phone = (formData.get('phone') as string) || null
   const department = (formData.get('department') as string) || null
-  const job_position = (formData.get('job_position') as string) || null // <-- Added job_position
+  const job_position = (formData.get('job_position') as string) || null
   const nickname = (formData.get('nickname') as string) || null
   const npwp = (formData.get('npwp') as string) || null
   const birth_place = (formData.get('birth_place') as string) || null
@@ -93,8 +115,7 @@ export async function updateEmployee(formData: FormData) {
   const { error } = await supabase.from('employees').update({
     company_id, employee_code, full_name, nik, gender, religion, birth_date,
     hire_date, employment_status, marital_status, email, phone, department,
-    job_position, // <-- Added job_position here
-    nickname, npwp, birth_place, address, emergency_contact_name, 
+    job_position, nickname, npwp, birth_place, address, emergency_contact_name, 
     emergency_contact_phone, bank_account, bank_account_name, notes, status,
     resign_date, updated_at: new Date().toISOString(),
   }).eq('id', id)

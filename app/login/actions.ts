@@ -6,12 +6,17 @@ import { createClient } from '../../utils/supabase/server'
 export async function login(formData: FormData) {
   const supabase = await createClient()
 
-  // Clean the email to prevent trailing space issues
-  const email = (formData.get('email') as string)?.trim()
+  // Get the input value (can be a short username like 'andi' or a full email)
+  let emailOrUsername = (formData.get('email') as string)?.trim().toLowerCase()
   const password = formData.get('password') as string
 
+  // If the user did not type an '@', automatically append your system domain
+  if (emailOrUsername && !emailOrUsername.includes('@')) {
+    emailOrUsername = `${emailOrUsername}@aplusgroup.my.id`
+  }
+
   const { data, error } = await supabase.auth.signInWithPassword({
-    email,
+    email: emailOrUsername,
     password,
   })
 
