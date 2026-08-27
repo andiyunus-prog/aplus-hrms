@@ -27,8 +27,7 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Do not run code between createServerClient and
-  // supabase.auth.getUser()
+  // Do not run code between createServerClient and supabase.auth.getUser()
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -41,16 +40,46 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // 2. If user IS logged in and trying to go to /login or the root page /, send them to /dashboard
-  if (user && (url.pathname === '/' || url.pathname === '/login')) {
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
-  }
-
-  // 3. If user is NOT logged in and hits the root page /, send them to /login
+  // 2. If user is NOT logged in and hits the root page /, send them to /login
   if (!user && url.pathname === '/') {
     url.pathname = '/login'
     return NextResponse.redirect(url)
+  }
+
+  // 3. Authenticated user logic
+  if (user) {
+    // Fetch user's role from profiles table
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('roles(code)')
+      .eq('id', user.id)
+      .single()
+
+    const rawRoles: any = profile?.roles
+    const roleCode = (
+      Array.isArray(rawRoles) ? rawRoles[0]?.code : rawRoles?.code
+    )?.toUpperCase() || ''
+
+    const isAdmin = ['OWNER', 'ADMIN', 'HRD', 'HR', 'HR_ADMIN'].includes(roleCode)
+    const isProfilePage = url.pathname.startsWith('/dashboard/my-profile')
+
+    // Redirect logged-in user hitting / or /login to their designated portal
+    if (url.pathname === '/' || url.pathname === '/login') {
+      url.pathname = isAdmin ? '/dashboard' : '/dashboard/my-profile'
+      return NextResponse.redirect(url)
+    }
+
+    // REGULAR EMPLOYEE GUARD: Force non-admins to /dashboard/my-profile if accessing any admin route
+    if (!isAdmin && url.pathname.startsWith('/dashboard') && !isProfilePage) {
+      url.pathname = '/dashboard/my-profile'
+      return NextResponse.redirect(url)
+    }
+
+    // ADMIN GUARD: Keep admins on main dashboard if they try to visit /dashboard/my-profile
+    if (isAdmin && isProfilePage) {
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse

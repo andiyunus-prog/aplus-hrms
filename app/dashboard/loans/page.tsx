@@ -4,10 +4,18 @@ import { createClient } from '../../../utils/supabase/server'
 import { requestLoan, updateLoanStatus } from './actions'
 import Link from 'next/link'
 import { requireOwnerPage } from '../../../utils/supabase/auth'
+import { getCurrentUserRole } from '../../../utils/supabase/auth'
+import { redirect } from 'next/navigation'
 
 export default async function LoansPage() {
   await requireOwnerPage() // <-- SECURED WITH ONE CLEAN LINE
+// SECURITY GUARD: Lock out regular employees
+  const userRole = await getCurrentUserRole()
+  const isRegularEmployee = !['OWNER', 'ADMIN', 'HRD', 'HR', 'HR_ADMIN'].includes(userRole || '')
 
+  if (isRegularEmployee) {
+    redirect('/dashboard/my-profile')
+  }
   const supabase = await createClient()
 
   // 1. Fetch active employees for the dropdown

@@ -2,6 +2,8 @@ import { createClient } from '../../../utils/supabase/server'
 import { createLeaveRequest } from './actions'
 import LeaveTable from './leave-table'
 import Link from 'next/link'
+import { getCurrentUserRole } from '../../../utils/supabase/auth'
+import { redirect } from 'next/navigation'
 
 // 1. Explicitly define the shapes for our dropdown data
 type EmployeeOption = {
@@ -20,7 +22,13 @@ type LeaveTypeOption = {
 
 export default async function LeaveManagementPage() {
   const supabase = await createClient()
+// SECURITY GUARD: Lock out regular employees
+  const userRole = await getCurrentUserRole()
+  const isRegularEmployee = !['OWNER', 'ADMIN', 'HRD', 'HR', 'HR_ADMIN'].includes(userRole || '')
 
+  if (isRegularEmployee) {
+    redirect('/dashboard/my-profile')
+  }
   // Fetch employees for the form dropdown
   const { data: rawEmployees } = await supabase
     .from('employees')

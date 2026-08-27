@@ -6,7 +6,9 @@ import { redirect } from 'next/navigation'
 import { saveLatenessRecords } from './actions'
 import Link from 'next/link'
 
+
 export default async function AttendanceLatenessPage({
+  
   searchParams,
 }: {
   searchParams: Promise<{ month?: string; year?: string }>

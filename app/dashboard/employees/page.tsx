@@ -1,10 +1,18 @@
 import { createAdminClient } from '../../../utils/supabase/admin'
 import EmployeeTable from './employee-table'
 import CreateEmployeeModal from './create-employee-modal'
+import { getCurrentUserRole } from '../../../utils/supabase/auth'
+import { redirect } from 'next/navigation'
 
 export default async function EmployeesPage() {
   const adminSupabase = createAdminClient()
+// SECURITY GUARD: Lock out regular employees
+  const userRole = await getCurrentUserRole()
+  const isRegularEmployee = !['OWNER', 'ADMIN', 'HRD', 'HR', 'HR_ADMIN'].includes(userRole || '')
 
+  if (isRegularEmployee) {
+    redirect('/dashboard/my-profile')
+  }
   const [{ data: employees }, { data: companies }] = await Promise.all([
     adminSupabase
       .from('employees')

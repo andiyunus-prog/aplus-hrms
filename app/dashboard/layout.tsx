@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '../../utils/supabase/server'
 import { getCurrentUserRole } from '../../utils/supabase/auth'
 
@@ -21,6 +22,22 @@ export default async function DashboardLayout({
   
   // Define if the user is a regular employee (not owner, admin, or hrd)
   const isRegularEmployee = !isOwnerOrAdmin && userRole !== 'HRD'
+
+  // ================= ROUTE SECURITY GUARD =================
+  const headersList = await headers()
+  const fullUrl = headersList.get('x-url') || headersList.get('referer') || ''
+  let pathname = ''
+  try {
+    pathname = fullUrl ? new URL(fullUrl).pathname : ''
+  } catch {
+    pathname = fullUrl
+  }
+
+  // If a regular employee manually types an admin route (e.g. /dashboard/companies), block & redirect
+  if (isRegularEmployee && pathname.startsWith('/dashboard') && !pathname.startsWith('/dashboard/my-profile')) {
+    redirect('/dashboard/my-profile')
+  }
+  // ========================================================
 
   async function signOut() {
     'use server'

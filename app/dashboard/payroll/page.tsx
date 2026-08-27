@@ -5,6 +5,8 @@ import { generatePayslip } from './actions'
 import PayslipTable from './payslip-table'
 import Link from 'next/link'
 import { requireOwnerPage } from '../../../utils/supabase/auth'
+import { getCurrentUserRole } from '../../../utils/supabase/auth'
+import { redirect } from 'next/navigation'
 
 export default async function PayrollOverviewPage({
   searchParams,
@@ -12,7 +14,13 @@ export default async function PayrollOverviewPage({
   searchParams: Promise<{ month?: string; year?: string; search?: string }>
 }) {
   await requireOwnerPage() // <-- SECURED WITH ONE CLEAN LINE
+// SECURITY GUARD: Lock out regular employees
+  const userRole = await getCurrentUserRole()
+  const isRegularEmployee = !['OWNER', 'ADMIN', 'HRD', 'HR', 'HR_ADMIN'].includes(userRole || '')
 
+  if (isRegularEmployee) {
+    redirect('/dashboard/my-profile')
+  }
   const supabase = await createClient()
   const resolvedParams = await searchParams
 

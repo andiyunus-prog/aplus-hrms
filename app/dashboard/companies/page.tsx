@@ -1,10 +1,18 @@
 import { createClient } from '../../../utils/supabase/server'
 import { createCompany } from './actions'
 import CompanyTable from './company-table'
+import { getCurrentUserRole } from '../../../utils/supabase/auth'
+import { redirect } from 'next/navigation'
 
 export default async function CompaniesPage() {
   const supabase = await createClient()
+  // SECURITY GUARD: Lock out regular employees
+  const userRole = await getCurrentUserRole()
+  const isRegularEmployee = !['OWNER', 'ADMIN', 'HRD', 'HR', 'HR_ADMIN'].includes(userRole || '')
 
+  if (isRegularEmployee) {
+    redirect('/dashboard/my-profile')
+  }
   // Fetch data directly on the server
   const { data: companies } = await supabase
     .from('companies')
