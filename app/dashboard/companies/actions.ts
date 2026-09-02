@@ -68,3 +68,39 @@ export async function deleteCompany(formData: FormData) {
 
   revalidatePath('/dashboard/companies')
 }
+
+export async function addDepartment(formData: FormData) {
+  const supabase = await createClient()
+
+  const company_id = formData.get('company_id') as string
+  const name = formData.get('name') as string
+
+  if (!company_id || !name || !name.trim()) return
+
+  const { error } = await supabase
+    .from('departments')
+    .insert([{ company_id, name: name.trim() }])
+
+  if (error) {
+    console.error('Error adding department:', error.message)
+    return
+  }
+
+  revalidatePath('/dashboard/companies')
+}
+
+export async function deleteDepartment(formData: FormData) {
+  const supabase = await createClient()
+  const id = formData.get('id') as string
+
+  if (!id) return
+
+  const { error } = await supabase.from('departments').delete().eq('id', id)
+
+  if (error) {
+    console.error('Error deleting department:', error.message)
+    return
+  }
+
+  revalidatePath('/dashboard/companies')
+}

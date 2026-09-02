@@ -9,8 +9,24 @@ type Company = {
   legal_name?: string
 }
 
-export default function CreateEmployeeModal({ companies }: { companies: Company[] }) {
+type Department = {
+  id: string
+  company_id: string
+  name: string
+}
+
+export default function CreateEmployeeModal({ 
+  companies, 
+  departments = [] 
+}: { 
+  companies: Company[]
+  departments?: Department[]
+}) {
   const [isOpen, setIsOpen] = useState(false)
+  const [selectedCompanyId, setSelectedCompanyId] = useState('')
+
+  // Filter departments based on selected company
+  const availableDepartments = departments.filter(d => d.company_id === selectedCompanyId)
 
   return (
     <>
@@ -75,7 +91,13 @@ export default function CreateEmployeeModal({ companies }: { companies: Company[
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Company *</label>
-                    <select name="company_id" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500">
+                    <select 
+                      name="company_id" 
+                      required 
+                      value={selectedCompanyId}
+                      onChange={(e) => setSelectedCompanyId(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 bg-white"
+                    >
                       <option value="">Select Company</option>
                       {companies.map((comp) => (
                         <option key={comp.id} value={comp.id}>{comp.legal_name || comp.name}</option>
@@ -88,14 +110,30 @@ export default function CreateEmployeeModal({ companies }: { companies: Company[
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Status *</label>
-                    <select name="status" defaultValue="ACTIVE" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500">
+                    <select name="status" defaultValue="ACTIVE" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 bg-white">
                       <option value="ACTIVE">ACTIVE</option>
                       <option value="INACTIVE">INACTIVE</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Department</label>
-                    <input type="text" name="department" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500" />
+                    <select 
+                      name="department" 
+                      disabled={!selectedCompanyId}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-400"
+                    >
+                      <option value="">
+                        {!selectedCompanyId 
+                          ? '-- Select Company First --' 
+                          : availableDepartments.length === 0 
+                            ? 'No Preset Departments' 
+                            : '-- Select Department --'
+                        }
+                      </option>
+                      {availableDepartments.map((dept) => (
+                        <option key={dept.id} value={dept.name}>{dept.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Job Position</label>
@@ -103,7 +141,7 @@ export default function CreateEmployeeModal({ companies }: { companies: Company[
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Employment Status *</label>
-                    <select name="employment_status" defaultValue="PROBATION" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500">
+                    <select name="employment_status" defaultValue="PROBATION" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 bg-white">
                       <option value="PROBATION">PROBATION</option>
                       <option value="PERMANENT">PERMANENT</option>
                       <option value="CONTRACT">CONTRACT</option>
@@ -142,7 +180,7 @@ export default function CreateEmployeeModal({ companies }: { companies: Company[
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Gender *</label>
-                    <select name="gender" defaultValue="MALE" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500">
+                    <select name="gender" defaultValue="MALE" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 bg-white">
                       <option value="MALE">MALE</option>
                       <option value="FEMALE">FEMALE</option>
                     </select>
@@ -157,7 +195,7 @@ export default function CreateEmployeeModal({ companies }: { companies: Company[
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Religion *</label>
-                    <select name="religion" defaultValue="ISLAM" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500">
+                    <select name="religion" defaultValue="ISLAM" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 bg-white">
                       <option value="ISLAM">ISLAM</option>
                       <option value="PROTESTANT">PROTESTANT</option>
                       <option value="CATHOLIC">CATHOLIC</option>
@@ -168,7 +206,7 @@ export default function CreateEmployeeModal({ companies }: { companies: Company[
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Marital Status *</label>
-                    <select name="marital_status" defaultValue="SINGLE" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500">
+                    <select name="marital_status" defaultValue="SINGLE" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 bg-white">
                       <option value="SINGLE">SINGLE</option>
                       <option value="MARRIED">MARRIED</option>
                       <option value="DIVORCED">DIVORCED</option>

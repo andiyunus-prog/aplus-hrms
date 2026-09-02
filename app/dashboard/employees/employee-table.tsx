@@ -11,6 +11,12 @@ type Company = {
   legal_name?: string
 }
 
+type Department = {
+  id: string
+  company_id: string
+  name: string
+}
+
 type Employee = {
   id: string
   company_id: string
@@ -44,9 +50,11 @@ type Employee = {
 export default function EmployeeTable({
   employees,
   companies,
+  departments = [],
 }: {
   employees: Employee[]
   companies: Company[]
+  departments?: Department[]
 }) {
   const [search, setSearch] = useState('')
 
