@@ -94,75 +94,52 @@ export async function generatePayslip(formData: FormData) {
     .select('id, tenor_months, status')
     .eq('employee_id', employee_id)
 
-  console.log('--- DEBUG: All raw loans for employee ---', rawLoans, loanError)
-
-  // Filter for valid approved/disbursed loans based on your schema check constraints
   const loans = rawLoans?.filter(l => {
     const s = String(l.status || '').trim().toUpperCase()
     return ['APPROVED', 'DISBURSED'].includes(s)
   }) || []
 
-  console.log('--- DEBUG: Filtered active loans ---', loans)
-
-  if (loans.length === 0) {
-    await supabase.from('payslips').insert({
-      employee_id,
-      period_month,
-      period_year,
-      base_salary,
-      total_earnings: 0,
-      total_deductions: 0,
-      net_salary: base_salary,
-      status: 'DRAFT'
-    })
-    revalidatePath('/dashboard/payroll')
-    return
-  }
-
   // Map loan ID to tenor_months correctly
   const loanMap = new Map(loans.map(l => [l.id, Number(l.tenor_months || 1)]))
   const loanIds = loans.map(l => l.id)
 
-  // Fetch all installments for these loans to inspect status and dates
-  const { data: installments, error: instError } = await supabase
-    .from('employee_loan_installments')
-    .select('*')
-    .in('loan_id', loanIds)
-
-  console.log('--- DEBUG: All installments in DB for these loans ---', installments, instError)
-
   let smallLoanTotal = 0
   const bigLoanItems: { id: string; amount: number; label: string }[] = []
 
-  installments?.forEach(inst => {
-    // Check if it's unpaid and falls on or before the current target period
-    const isUnpaid = inst.status === 'UNPAID' || inst.status === 'PENDING'
-    const isPastOrCurrent = 
-      inst.period_year < period_year || 
-      (inst.period_year === period_year && inst.period_month <= period_month)
+  if (loanIds.length > 0) {
+    const { data: installments } = await supabase
+      .from('employee_loan_installments')
+      .select('*')
+      .in('loan_id', loanIds)
 
-    if (isUnpaid && isPastOrCurrent) {
-      const tenor = loanMap.get(inst.loan_id) || 1
-      const amt = Number(inst.amount)
-      const monthName = MONTH_NAMES[inst.period_month] || ''
-      const shortYear = String(inst.period_year).slice(-2)
+    installments?.forEach(inst => {
+      const isUnpaid = inst.status === 'UNPAID' || inst.status === 'PENDING'
+      const isPastOrCurrent = 
+        inst.period_year < period_year || 
+        (inst.period_year === period_year && inst.period_month <= period_month)
 
-      if (tenor === 1) {
-        smallLoanTotal += amt
-      } else {
-        bigLoanItems.push({
-          id: inst.id,
-          amount: amt,
-          label: `Big Loan ${monthName}${shortYear}`
-        })
+      if (isUnpaid && isPastOrCurrent) {
+        const tenor = loanMap.get(inst.loan_id) || 1
+        const amt = Number(inst.amount)
+        const monthName = MONTH_NAMES[inst.period_month] || ''
+        const shortYear = String(inst.period_year).slice(-2)
+
+        if (tenor === 1) {
+          smallLoanTotal += amt
+        } else {
+          bigLoanItems.push({
+            id: inst.id,
+            amount: amt,
+            label: `Big Loan ${monthName}${shortYear}`
+          })
+        }
       }
-    }
-  })
+    })
+  }
 
-  const total_deductions = smallLoanTotal + bigLoanItems.reduce((sum, item) => sum + item.amount, 0)
-  console.log('--- DEBUG: Calculated total deductions ---', total_deductions)
+  const initialDeductions = smallLoanTotal + bigLoanItems.reduce((sum, item) => sum + item.amount, 0)
 
-  // 3. Insert payslip
+  // 3. Insert base payslip
   const { data: payslip, error: psError } = await supabase
     .from('payslips')
     .insert({
@@ -171,18 +148,22 @@ export async function generatePayslip(formData: FormData) {
       period_year,
       base_salary,
       total_earnings: 0,
-      total_deductions,
-      net_salary: base_salary - total_deductions,
+      total_deductions: initialDeductions,
+      net_salary: base_salary - initialDeductions,
       status: 'DRAFT'
     })
     .select()
     .single()
 
-  if (psError || !payslip) return
+  if (psError || !payslip) {
+    console.error('--- ERROR INSERTING PAYSLIP ---', psError?.message)
+    return
+  }
 
   const currentMonthName = MONTH_NAMES[period_month] || ''
   const currentShortYear = String(period_year).slice(-2)
 
+  // Insert Small Loan Item
   if (smallLoanTotal > 0) {
     await supabase.from('payslip_items').insert({
       payslip_id: payslip.id,
@@ -192,6 +173,7 @@ export async function generatePayslip(formData: FormData) {
     })
   }
 
+  // Insert Big Loan Items
   for (const bigItem of bigLoanItems) {
     await supabase.from('payslip_items').insert({
       payslip_id: payslip.id,
@@ -201,8 +183,45 @@ export async function generatePayslip(formData: FormData) {
     })
   }
 
+  // 4. Fetch & Inject Employee Default Presets (BPJS, Tunjangan, etc.)
+  const { data: defaultComps, error: defaultCompsError } = await supabase
+    .from('employee_default_components')
+    .select(`
+      default_amount,
+      salary_components ( name, type )
+    `)
+    .eq('employee_id', employee_id)
+
+  if (defaultCompsError) {
+    console.error('--- ERROR FETCHING DEFAULT PRESETS ---', defaultCompsError.message)
+  }
+
+  if (defaultComps && defaultComps.length > 0) {
+    const presetItemsToInsert = defaultComps
+      .filter((item: any) => item.salary_components)
+      .map((item: any) => ({
+        payslip_id: payslip.id,
+        name: item.salary_components.name,
+        type: item.salary_components.type,
+        amount: Number(item.default_amount || 0)
+      }))
+
+    if (presetItemsToInsert.length > 0) {
+      const { error: insertPresetErr } = await supabase
+        .from('payslip_items')
+        .insert(presetItemsToInsert)
+
+      if (insertPresetErr) {
+        console.error('--- ERROR INJECTING PRESET ITEMS ---', insertPresetErr.message)
+      }
+    }
+  }
+
+  // 5. Final Recalculation
   await recalculatePayslipTotals(payslip.id)
+
   revalidatePath('/dashboard/payroll')
+  revalidatePath(`/dashboard/payroll/${payslip.id}`)
   revalidatePath(`/dashboard/employees/${employee_id}/financials`)
 }
 

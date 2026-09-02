@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '../../../../../utils/supabase/server'
 import Link from 'next/link'
 import { requireOwnerPage } from '../../../../../utils/supabase/auth'
+import { addDefaultComponent, deleteDefaultComponent } from './actions'
 
 type Props = {
   params: Promise<{ id: string }>
@@ -25,7 +26,23 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
     return <div className="p-8">Employee not found.</div>
   }
 
-  // 2. Fetch All Loans for this Employee
+  // 2. Fetch Active Default Components & Available Company Salary Components
+  const { data: defaultComponents } = await supabase
+    .from('employee_default_components')
+    .select(`
+      id,
+      default_amount,
+      salary_components ( id, name, type )
+    `)
+    .eq('employee_id', id)
+
+  const { data: companySalaryComponents } = await supabase
+    .from('salary_components')
+    .select('id, name, type')
+    .eq('company_id', employee.company_id)
+    .order('name')
+
+  // 3. Fetch All Loans for this Employee
   const { data: loans } = await supabase
     .from('employee_loans')
     .select('*')
@@ -34,7 +51,7 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
 
   const loanIds = loans?.map(l => l.id) || []
 
-  // 3. Fetch All Installments for these Loans
+  // 4. Fetch All Installments for these Loans
   let installments: any[] = []
   if (loanIds.length > 0) {
     const { data: instData } = await supabase
@@ -44,7 +61,7 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
     installments = instData || []
   }
 
-  // 4. Fetch Payslip History matching your schema (`payslips` table)
+  // 5. Fetch Payslip History
   const { data: payslips } = await supabase
     .from('payslips')
     .select(`
@@ -114,6 +131,94 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
         </div>
       </div>
 
+      {/* Recurring Salary Presets Section (BPJS / Tunjangan) */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-6">
+        <div className="border-b pb-3">
+          <h3 className="text-lg font-semibold text-gray-800">Recurring Salary Presets</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Components configured here (e.g. BPJS, Tunjangan Jabatan) will automatically apply to every draft payslip generated for this employee.
+          </p>
+        </div>
+
+        {/* Active Presets List */}
+        <div className="space-y-3">
+          {defaultComponents && defaultComponents.length > 0 ? (
+            <div className="divide-y divide-gray-100 border rounded-md">
+              {defaultComponents.map((item: any) => (
+                <div key={item.id} className="flex justify-between items-center p-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      item.salary_components?.type === 'EARNING' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {item.salary_components?.type}
+                    </span>
+                    <span className="font-medium text-gray-800">{item.salary_components?.name}</span>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <span className="font-semibold text-gray-900">
+                      Rp {Number(item.default_amount).toLocaleString('id-ID')}
+                    </span>
+                    <form action={deleteDefaultComponent}>
+                      <input type="hidden" name="id" value={item.id} />
+                      <input type="hidden" name="employee_id" value={employee.id} />
+                      <button 
+                        type="submit" 
+                        className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic">No recurring presets assigned to this employee yet.</p>
+          )}
+        </div>
+
+        {/* Add New Preset Form */}
+        <form action={addDefaultComponent} className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm bg-gray-50 p-4 rounded-md border border-gray-200 items-end">
+          <input type="hidden" name="employee_id" value={employee.id} />
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Salary Component</label>
+            <select name="component_id" required className="w-full rounded border border-gray-300 p-2 text-xs bg-white focus:ring-blue-500">
+              <option value="">-- Select Component --</option>
+              {companySalaryComponents?.map((comp: any) => (
+                <option key={comp.id} value={comp.id}>
+                  [{comp.type}] {comp.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Default Amount (Rp)</label>
+            <input 
+              type="number" 
+              name="default_amount" 
+              placeholder="e.g. 150000" 
+              required 
+              min="1" 
+              className="w-full rounded border border-gray-300 p-2 text-xs bg-white focus:ring-blue-500" 
+            />
+          </div>
+
+          <div>
+            <button 
+              type="submit" 
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded text-xs transition-colors"
+            >
+              Save Default Preset
+            </button>
+          </div>
+        </form>
+      </div>
+
       {/* Loans & Audit Trail Section */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
@@ -124,8 +229,6 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
           {loans && loans.length > 0 ? (
             loans.map((loan) => {
               const loanInsts = installments.filter(i => i.loan_id === loan.id)
-              const paidCount = loanInsts.filter(i => i.status === 'PAID').length
-              const totalCount = loanInsts.length
 
               const requestedDate = new Date(loan.created_at).toLocaleString('en-GB', {
                 dateStyle: 'medium',

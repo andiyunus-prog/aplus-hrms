@@ -39,11 +39,9 @@ async function recalculatePayslipTotals(payslip_id: string) {
 }
 
 export async function addPayslipItem(formData: FormData) {
-  // --- SECURITY CHECK ---
   if (!(await verifyOwnerAction())) return
-  // ----------------------
   const supabase = await createClient()
-  
+
   const payslip_id = formData.get('payslip_id') as string
   const name = formData.get('name') as string
   const type = formData.get('type') as string
@@ -51,9 +49,26 @@ export async function addPayslipItem(formData: FormData) {
 
   if (!payslip_id || !name || !type || amount <= 0) return
 
-  await supabase.from('payslip_items').insert([{ payslip_id, name, type, amount }])
+  // Check if an item with the exact same name already exists on this draft payslip
+  const { data: existingItem } = await supabase
+    .from('payslip_items')
+    .select('id')
+    .eq('payslip_id', payslip_id)
+    .eq('name', name)
+    .single()
+
+  if (existingItem) {
+    // Update existing item amount
+    await supabase
+      .from('payslip_items')
+      .update({ amount })
+      .eq('id', existingItem.id)
+  } else {
+    // Insert new item
+    await supabase.from('payslip_items').insert([{ payslip_id, name, type, amount }])
+  }
+
   await recalculatePayslipTotals(payslip_id)
-  
   revalidatePath(`/dashboard/payroll/${payslip_id}`)
 }
 
@@ -71,6 +86,64 @@ export async function deletePayslipItem(formData: FormData) {
   await supabase.from('payslip_items').delete().eq('id', id)
   await recalculatePayslipTotals(payslip_id)
   
+  revalidatePath(`/dashboard/payroll/${payslip_id}`)
+}
+
+export async function applyOvertime(formData: FormData) {
+  if (!(await verifyOwnerAction())) return
+  const supabase = await createClient()
+
+  const payslip_id = formData.get('payslip_id') as string
+  const ot_days = parseFloat(formData.get('ot_days') as string) || 0
+  const ot_hours = parseFloat(formData.get('ot_hours') as string) || 0
+
+  if (!payslip_id || (ot_days <= 0 && ot_hours <= 0)) return
+
+  // Fetch payslip base salary
+  const { data: payslip } = await supabase
+    .from('payslips')
+    .select('base_salary')
+    .eq('id', payslip_id)
+    .single()
+
+  if (!payslip) return
+
+  const baseSalary = Number(payslip.base_salary || 0)
+
+  // Daily Rate = Base / 30 | Hourly Rate = Daily / 8
+  const dailyRate = baseSalary / 30
+  const hourlyRate = dailyRate / 8
+
+  // Calculate total overtime pay (rounded to nearest IDR)
+  const totalOtPay = Math.round((ot_days * dailyRate) + (ot_hours * hourlyRate))
+
+  if (totalOtPay <= 0) return
+
+  const otName = `Overtime Pay (${ot_days > 0 ? `${ot_days}d ` : ''}${ot_hours > 0 ? `${ot_hours}h` : ''})`.trim()
+
+  const { data: existingItems } = await supabase
+    .from('payslip_items')
+    .select('id, name')
+    .eq('payslip_id', payslip_id)
+    .eq('type', 'EARNING')
+
+  const existingOt = existingItems?.find(item => item.name.toLowerCase().includes('overtime'))
+
+  if (existingOt) {
+    await supabase
+      .from('payslip_items')
+      .update({ name: otName, amount: totalOtPay })
+      .eq('id', existingOt.id)
+  } else {
+    await supabase.from('payslip_items').insert({
+      payslip_id,
+      name: otName,
+      type: 'EARNING',
+      amount: totalOtPay
+    })
+  }
+
+  await recalculatePayslipTotals(payslip_id)
   revalidatePath(`/dashboard/payroll/${payslip_id}`)
 }
 
@@ -105,7 +178,6 @@ export async function markAsPaid(formData: FormData) {
   const latenessMinutes = Number(latenessRecord?.late_minutes || 0)
 
   if (latenessDeductionAmount > 0) {
-    // Check if the lateness penalty item is already attached to this payslip
     const { data: existingItems } = await supabase
       .from('payslip_items')
       .select('name')
@@ -158,7 +230,6 @@ export async function markAsPaid(formData: FormData) {
     const loanIds = loans?.map(l => l.id) || []
 
     if (loanIds.length > 0) {
-      // Fetch all UNPAID installments ordered from oldest to newest
       const { data: installments } = await supabase
         .from('employee_loan_installments')
         .select('id, loan_id, amount, period_month, period_year')
@@ -174,7 +245,6 @@ export async function markAsPaid(formData: FormData) {
           const instAmount = Number(inst.amount)
 
           if (totalDeductionBudget >= instAmount) {
-            // Pay off this installment fully
             await supabase
               .from('employee_loan_installments')
               .update({ status: 'PAID', updated_at: new Date().toISOString() })
@@ -182,7 +252,6 @@ export async function markAsPaid(formData: FormData) {
 
             totalDeductionBudget -= instAmount
           } else {
-            // Partial payment: Pay part of this installment and roll over the remainder
             const remainder = instAmount - totalDeductionBudget
 
             await supabase
@@ -190,7 +259,6 @@ export async function markAsPaid(formData: FormData) {
               .update({ amount: totalDeductionBudget, status: 'PAID', updated_at: new Date().toISOString() })
               .eq('id', inst.id)
 
-            // Roll over remainder to next month
             let nextMonth = payslip.period_month + 1
             let nextYear = payslip.period_year
             if (nextMonth > 12) {
@@ -213,7 +281,7 @@ export async function markAsPaid(formData: FormData) {
     }
   }
 
-  // 5. Final recalculation to lock in lateness + loan totals permanently
+  // 5. Final recalculation
   await recalculatePayslipTotals(id)
 
   revalidatePath('/dashboard/payroll')
