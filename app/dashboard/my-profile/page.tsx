@@ -2,6 +2,7 @@ import { createClient } from '../../../utils/supabase/server'
 import { createAdminClient } from '../../../utils/supabase/admin'
 import { redirect } from 'next/navigation'
 import { submitLeaveRequest, submitLoanRequest } from './actions'
+import ChangePasswordCard from './change-password-card'
 
 export default async function MyProfilePage() {
   const supabase = await createClient()
@@ -133,6 +134,9 @@ export default async function MyProfilePage() {
           {employee.employment_status}
         </span>
       </div>
+
+      {/* Security & Password Settings Card */}
+      <ChangePasswordCard />
 
       {/* Profile Details Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

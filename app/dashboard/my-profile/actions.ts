@@ -4,6 +4,32 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '../../../utils/supabase/server'
 import { createAdminClient } from '../../../utils/supabase/admin'
 
+export async function updatePassword(formData: FormData) {
+  const supabase = await createClient()
+
+  const password = formData.get('password') as string
+  const confirmPassword = formData.get('confirm_password') as string
+
+  if (!password || password.length < 6) {
+    console.error('Password must be at least 6 characters long.')
+    return
+  }
+
+  if (password !== confirmPassword) {
+    console.error('Passwords do not match.')
+    return
+  }
+
+  // Update authenticated user's password in Supabase Auth
+  const { error } = await supabase.auth.updateUser({ password })
+
+  if (error) {
+    console.error('Error updating password:', error.message)
+    return
+  }
+
+  revalidatePath('/dashboard/my-profile')
+}
 // 1. SUBMIT LEAVE REQUEST
 export async function submitLeaveRequest(formData: FormData) {
   const supabase = await createClient()
