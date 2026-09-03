@@ -14,7 +14,7 @@ export default function ChangePasswordCard() {
     const password = formData.get('password') as string
     const confirmPassword = formData.get('confirm_password') as string
 
-    if (password.length < 4) {
+    if (!password || password.length < 4) {
       setStatus({ message: 'Password must be at least 4 characters.', type: 'error' })
       setLoading(false)
       return
@@ -33,9 +33,9 @@ export default function ChangePasswordCard() {
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-4">
-      <div className="border-b pb-2">
-        <h3 className="text-md font-semibold text-gray-800">Security & Account Settings</h3>
-        <p className="text-xs text-gray-500 mt-0.5">Change your system login password.</p>
+      <div className="border-b border-gray-100 pb-2">
+        <h3 className="text-md font-semibold text-gray-800">Security & Password</h3>
+        <p className="text-xs text-gray-500 mt-0.5">Change your system account password.</p>
       </div>
 
       {status && (
@@ -51,7 +51,7 @@ export default function ChangePasswordCard() {
             type="password" 
             name="password" 
             required 
-            minLength={6} 
+            minLength={4}
             placeholder="Minimum 4 characters" 
             className="w-full rounded-md border border-gray-300 p-2 text-xs bg-white focus:ring-blue-500" 
           />
@@ -63,7 +63,7 @@ export default function ChangePasswordCard() {
             type="password" 
             name="confirm_password" 
             required 
-            minLength={4} 
+            minLength={4}
             placeholder="Re-enter password" 
             className="w-full rounded-md border border-gray-300 p-2 text-xs bg-white focus:ring-blue-500" 
           />

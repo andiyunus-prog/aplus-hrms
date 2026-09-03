@@ -10,17 +10,10 @@ export async function updatePassword(formData: FormData) {
   const password = formData.get('password') as string
   const confirmPassword = formData.get('confirm_password') as string
 
-  if (!password || password.length < 4) {
-    console.error('Password must be at least 6 characters long.')
+  if (!password || password.length < 4 || password !== confirmPassword) {
     return
   }
 
-  if (password !== confirmPassword) {
-    console.error('Passwords do not match.')
-    return
-  }
-
-  // Update authenticated user's password in Supabase Auth
   const { error } = await supabase.auth.updateUser({ password })
 
   if (error) {
