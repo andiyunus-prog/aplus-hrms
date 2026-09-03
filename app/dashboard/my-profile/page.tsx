@@ -110,6 +110,13 @@ export default async function MyProfilePage() {
     .order('attendance_date', { ascending: false })
     .limit(15)
 
+  // 9.5 Fetch Granular Absences from employee_absences
+  const { data: absences } = await adminSupabase
+    .from('employee_absences')
+    .select('*')
+    .eq('employee_id', employee.id)
+    .order('absence_date', { ascending: false })
+
   const formatIDR = (amount: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount)
   }
@@ -319,6 +326,44 @@ export default async function MyProfilePage() {
           </div>
         ) : (
           <p className="text-sm text-gray-400 py-2">No loan records found.</p>
+        )}
+      </div>
+
+      {/* Logged Absence Dates Section */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-4">
+        <div className="flex justify-between items-center border-b pb-2">
+          <h3 className="text-md font-semibold text-gray-800">Logged Absence Dates</h3>
+          <span className="text-xs bg-red-50 text-red-700 px-2.5 py-0.5 rounded font-medium border border-red-200">
+            {absences?.length || 0} Day(s) Logged
+          </span>
+        </div>
+        {absences && absences.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-gray-500 uppercase text-xs">
+                  <th className="p-3">Absence Date</th>
+                  <th className="p-3">Reason / Note</th>
+                  <th className="p-3">Impact</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {absences.map((abs) => (
+                  <tr key={abs.id} className="hover:bg-gray-50">
+                    <td className="p-3 font-mono font-medium text-gray-900">{abs.absence_date}</td>
+                    <td className="p-3 text-gray-600">{abs.reason || 'Unexcused Absence'}</td>
+                    <td className="p-3">
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                        1 Day Salary Deduction
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 py-2">No logged absences. Perfect attendance!</p>
         )}
       </div>
 
