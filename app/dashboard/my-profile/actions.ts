@@ -10,7 +10,7 @@ export async function updatePassword(formData: FormData) {
   const password = formData.get('password') as string
   const confirmPassword = formData.get('confirm_password') as string
 
-  if (!password || password.length < 6) {
+  if (!password || password.length < 4) {
     console.error('Password must be at least 6 characters long.')
     return
   }
