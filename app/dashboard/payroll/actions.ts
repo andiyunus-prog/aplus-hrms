@@ -137,7 +137,24 @@ export async function generatePayslip(formData: FormData) {
     })
   }
 
-  const initialDeductions = smallLoanTotal + bigLoanItems.reduce((sum, item) => sum + item.amount, 0)
+  // 2.5 Fetch Granular Absence Dates for target month
+  const startDate = `${period_year}-${String(period_month).padStart(2, '0')}-01`
+  const lastDay = new Date(period_year, period_month, 0).getDate()
+  const endDate = `${period_year}-${String(period_month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+  const { data: absenceRecords } = await supabase
+    .from('employee_absences')
+    .select('absence_date')
+    .eq('employee_id', employee_id)
+    .gte('absence_date', startDate)
+    .lte('absence_date', endDate)
+
+  const absentDaysCount = absenceRecords?.length || 0
+  const dailyRate = Math.round(base_salary / 30)
+  const totalAbsenceDeduction = absentDaysCount * dailyRate
+
+  const loanDeductions = smallLoanTotal + bigLoanItems.reduce((sum, item) => sum + item.amount, 0)
+  const initialDeductions = loanDeductions + totalAbsenceDeduction
 
   // 3. Insert base payslip
   const { data: payslip, error: psError } = await supabase
@@ -180,6 +197,16 @@ export async function generatePayslip(formData: FormData) {
       name: bigItem.label,
       type: 'DEDUCTION',
       amount: bigItem.amount
+    })
+  }
+
+  // Insert Absence Deduction Item
+  if (totalAbsenceDeduction > 0) {
+    await supabase.from('payslip_items').insert({
+      payslip_id: payslip.id,
+      name: `Unexcused Absence (${absentDaysCount} day${absentDaysCount > 1 ? 's' : ''})`,
+      type: 'DEDUCTION',
+      amount: totalAbsenceDeduction
     })
   }
 
