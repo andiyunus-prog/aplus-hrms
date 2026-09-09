@@ -15,7 +15,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({
             request,
           })
@@ -48,6 +48,21 @@ export async function updateSession(request: NextRequest) {
 
   // 3. Authenticated user logic
   if (user) {
+    // 3.1 INACTIVE / RESIGNED EMPLOYEE GUARD: Block login access for inactive staff
+    const { data: employee } = await supabase
+      .from('employees')
+      .select('status')
+      .eq('auth_user_id', user.id)
+      .single()
+
+    const empStatus = employee?.status?.toUpperCase() || ''
+    if (['INACTIVE', 'RESIGNED'].includes(empStatus)) {
+      await supabase.auth.signOut()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'account_inactive')
+      return NextResponse.redirect(url)
+    }
+
     // Fetch user's role from profiles table
     const { data: profile } = await supabase
       .from('profiles')

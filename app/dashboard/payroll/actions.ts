@@ -13,6 +13,51 @@ function formatLoanLabel(tenor: number, month: number, year: number) {
   return `${prefix} ${monthName}${shortYear}`
 }
 
+function calculateProRatedSalary(
+  fullBaseSalary: number,
+  hireDateStr: string | null,
+  periodMonth: number,
+  periodYear: number
+): { proRatedBaseSalary: number; workingDays: number; totalMonthDays: number; isProRated: boolean } {
+  const totalMonthDays = new Date(periodYear, periodMonth, 0).getDate()
+
+  if (!hireDateStr) {
+    return {
+      proRatedBaseSalary: fullBaseSalary,
+      workingDays: totalMonthDays,
+      totalMonthDays,
+      isProRated: false
+    }
+  }
+
+  const hireDate = new Date(hireDateStr)
+  const hireYear = hireDate.getFullYear()
+  const hireMonth = hireDate.getMonth() + 1
+  const hireDay = hireDate.getDate()
+
+  // Case 1: Hired in a FUTURE month -> 0 base salary
+  if (hireYear > periodYear || (hireYear === periodYear && hireMonth > periodMonth)) {
+    return { proRatedBaseSalary: 0, workingDays: 0, totalMonthDays, isProRated: true }
+  }
+
+  // Case 2: Hired in a PAST month -> Full base salary
+  if (hireYear < periodYear || (hireYear === periodYear && hireMonth < periodMonth)) {
+    return { proRatedBaseSalary: fullBaseSalary, workingDays: totalMonthDays, totalMonthDays, isProRated: false }
+  }
+
+  // Case 3: Hired IN THIS TARGET MONTH -> Pro-rate from hireDay to last day of month
+  const workingDays = totalMonthDays - hireDay + 1
+  const dailyRate = fullBaseSalary / 30 // standard 30-day daily rate
+  const proRatedBaseSalary = Math.round(workingDays * dailyRate)
+
+  return {
+    proRatedBaseSalary,
+    workingDays,
+    totalMonthDays,
+    isProRated: true
+  }
+}
+
 async function recalculatePayslipTotals(payslipId: string) {
   if (!(await verifyOwnerAction())) return
   const supabase = await createClient()
@@ -79,14 +124,25 @@ export async function generatePayslip(formData: FormData) {
 
   if (!employee_id || !period_month || !period_year) return
 
-  // 1. Fetch employee base salary
+  // 1. Fetch employee base salary & hire_date
   const { data: salaryRecord } = await supabase
     .from('employee_salaries')
-    .select('base_salary')
+    .select('base_salary, employees(hire_date)')
     .eq('employee_id', employee_id)
     .single()
 
-  const base_salary = Number(salaryRecord?.base_salary || 0)
+  const fullBaseSalary = Number(salaryRecord?.base_salary || 0)
+  const hireDate = (salaryRecord?.employees as any)?.hire_date || null
+
+  // Calculate Pro-Rated Base Salary based on hire_date
+  const { proRatedBaseSalary, workingDays, totalMonthDays, isProRated } = calculateProRatedSalary(
+    fullBaseSalary,
+    hireDate,
+    period_month,
+    period_year
+  )
+
+  const base_salary = proRatedBaseSalary
 
   // 2. Fetch all loans for this employee using tenor_months
   const { data: rawLoans, error: loanError } = await supabase
@@ -179,6 +235,16 @@ export async function generatePayslip(formData: FormData) {
 
   const currentMonthName = MONTH_NAMES[period_month] || ''
   const currentShortYear = String(period_year).slice(-2)
+
+  // Insert Pro-Rated Salary Note Item if pro-rated calculation occurred
+  if (isProRated && workingDays > 0) {
+    await supabase.from('payslip_items').insert({
+      payslip_id: payslip.id,
+      name: `Pro-Rated Calculation (${workingDays}/${totalMonthDays} days active)`,
+      type: 'EARNING',
+      amount: 0
+    })
+  }
 
   // Insert Small Loan Item
   if (smallLoanTotal > 0) {

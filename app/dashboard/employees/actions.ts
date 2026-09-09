@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '../../../utils/supabase/admin'
 
 export async function createEmployee(formData: FormData) {
-  // Use adminSupabase to bypass RLS restrictions for management actions
   const adminSupabase = createAdminClient()
 
   const company_id = formData.get('company_id') as string
@@ -18,10 +17,8 @@ export async function createEmployee(formData: FormData) {
   const employment_status = formData.get('employment_status') as string
   const marital_status = formData.get('marital_status') as string
 
-  // Short login username (e.g. "johndoe") from the form
   const username = (formData.get('username') as string)?.trim().toLowerCase()
 
-  // Optional fields
   const email = (formData.get('email') as string) || null
   const phone = (formData.get('phone') as string) || null
   const department = (formData.get('department') as string) || null
@@ -44,7 +41,6 @@ export async function createEmployee(formData: FormData) {
 
   let auth_user_id = null
 
-  // Create Supabase Auth user if username is supplied
   if (username) {
     const authEmail = `${username}@aplusgroup.my.id`
     const defaultPassword = username
@@ -62,7 +58,6 @@ export async function createEmployee(formData: FormData) {
     }
   }
 
-  // Use adminSupabase to insert the employee row without RLS blocks
   const { error } = await adminSupabase.from('employees').insert([{
     company_id, employee_code, full_name, nik, gender, religion, birth_date,
     hire_date, employment_status, marital_status, email, phone, department,
@@ -77,6 +72,7 @@ export async function createEmployee(formData: FormData) {
   }
 
   revalidatePath('/dashboard/employees')
+  revalidatePath('/dashboard/employees/resigned')
 }
 
 export async function updateEmployee(formData: FormData) {
@@ -109,10 +105,15 @@ export async function updateEmployee(formData: FormData) {
   const bank_account = (formData.get('bank_account') as string) || null
   const bank_account_name = (formData.get('bank_account_name') as string) || null
   const notes = (formData.get('notes') as string) || null
-  const status = (formData.get('status') as string) || 'ACTIVE'
   
   const resign_date_raw = formData.get('resign_date') as string
   const resign_date = resign_date_raw ? resign_date_raw : null
+
+  // Automatically force 'RESIGNED' if a resignation date is present
+  let status = (formData.get('status') as string) || 'ACTIVE'
+  if (resign_date) {
+    status = 'RESIGNED'
+  }
 
   if (!id || !company_id || !employee_code || !full_name) return
 
@@ -141,7 +142,6 @@ export async function updateEmployee(formData: FormData) {
     }
   }
 
-  // Use adminSupabase to update the employee row without RLS blocks
   const { error } = await adminSupabase.from('employees').update(updateData).eq('id', id)
 
   if (error) {
@@ -150,6 +150,62 @@ export async function updateEmployee(formData: FormData) {
   }
 
   revalidatePath('/dashboard/employees')
+  revalidatePath('/dashboard/employees/resigned')
+}
+
+export async function markEmployeeResigned(formData: FormData) {
+  const adminSupabase = createAdminClient()
+
+  const employee_id = formData.get('employee_id') as string
+  const resign_date = (formData.get('resign_date') as string) || new Date().toISOString().split('T')[0]
+  const notes = (formData.get('notes') as string) || 'Resigned'
+
+  if (!employee_id) return
+
+  const { error } = await adminSupabase
+    .from('employees')
+    .update({
+      status: 'RESIGNED',
+      resign_date,
+      notes,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', employee_id)
+
+  if (error) {
+    console.error('Error marking employee as resigned:', error.message)
+    return
+  }
+
+  revalidatePath('/dashboard/employees')
+  revalidatePath('/dashboard/employees/resigned')
+}
+
+export async function rehireEmployee(formData: FormData) {
+  const adminSupabase = createAdminClient()
+
+  const employee_id = formData.get('employee_id') as string
+  const new_hire_date = (formData.get('hire_date') as string) || new Date().toISOString().split('T')[0]
+
+  if (!employee_id) return
+
+  const { error } = await adminSupabase
+    .from('employees')
+    .update({
+      status: 'ACTIVE',
+      hire_date: new_hire_date,
+      resign_date: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', employee_id)
+
+  if (error) {
+    console.error('Error rehiring employee:', error.message)
+    return
+  }
+
+  revalidatePath('/dashboard/employees')
+  revalidatePath('/dashboard/employees/resigned')
 }
 
 export async function deleteEmployee(formData: FormData) {
@@ -158,7 +214,6 @@ export async function deleteEmployee(formData: FormData) {
 
   if (!id) return
 
-  // 1. Fetch the employee row first to get their linked auth_user_id
   const { data: employee, error: fetchError } = await adminSupabase
     .from('employees')
     .select('auth_user_id')
@@ -170,7 +225,6 @@ export async function deleteEmployee(formData: FormData) {
     return
   }
 
-  // 2. If the employee has a linked Supabase Auth user, delete it from auth.users
   if (employee?.auth_user_id) {
     const { error: authDeleteError } = await adminSupabase.auth.admin.deleteUser(
       employee.auth_user_id
@@ -181,7 +235,6 @@ export async function deleteEmployee(formData: FormData) {
     }
   }
 
-  // 3. Delete the employee record from the database table
   const { error: dbDeleteError } = await adminSupabase
     .from('employees')
     .delete()
@@ -193,4 +246,5 @@ export async function deleteEmployee(formData: FormData) {
   }
 
   revalidatePath('/dashboard/employees')
+  revalidatePath('/dashboard/employees/resigned')
 }
