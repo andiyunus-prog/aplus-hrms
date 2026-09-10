@@ -3,11 +3,48 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '../../../utils/supabase/admin'
 
+// Helper to generate next sequential employee code for a company (e.g. APL-0001)
+async function generateEmployeeCode(adminSupabase: any, company_id: string): Promise<string> {
+  const { data: company } = await adminSupabase
+    .from('companies')
+    .select('name, code')
+    .eq('id', company_id)
+    .single()
+
+  const rawName = company?.code || company?.name || 'EMP'
+  const prefix = rawName.replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase().padEnd(3, 'X')
+
+  const { data: existingEmployees } = await adminSupabase
+    .from('employees')
+    .select('employee_code')
+    .ilike('employee_code', `${prefix}-%`)
+    .order('employee_code', { ascending: false })
+    .limit(1)
+
+  let nextNumber = 1
+
+  if (existingEmployees && existingEmployees.length > 0) {
+    const lastCode = existingEmployees[0].employee_code
+    const parts = lastCode.split('-')
+    if (parts.length === 2 && !isNaN(parseInt(parts[1], 10))) {
+      nextNumber = parseInt(parts[1], 10) + 1
+    }
+  }
+
+  return `${prefix}-${String(nextNumber).padStart(4, '0')}`
+}
+
 export async function createEmployee(formData: FormData) {
   const adminSupabase = createAdminClient()
 
   const company_id = formData.get('company_id') as string
-  const employee_code = formData.get('employee_code') as string
+  let employee_code = (formData.get('employee_code') as string)?.trim()
+
+  // Auto-generate code if left blank by the user/form
+  if (!employee_code && company_id) {
+    employee_code = await generateEmployeeCode(adminSupabase, company_id)
+  }
+
   const full_name = formData.get('full_name') as string
   const nik = formData.get('nik') as string
   const gender = formData.get('gender') as string
@@ -34,6 +71,7 @@ export async function createEmployee(formData: FormData) {
   const notes = (formData.get('notes') as string) || null
   const status = (formData.get('status') as string) || 'ACTIVE'
 
+  // Updated check: employee_code is validated AFTER auto-generation
   if (!company_id || !employee_code || !full_name || !nik || !gender || !religion || !birth_date || !hire_date || !employment_status || !marital_status) {
     console.error('Missing required employee fields')
     return

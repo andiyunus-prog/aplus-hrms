@@ -105,8 +105,13 @@ export default function CreateEmployeeModal({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Employee Code *</label>
-                    <input type="text" name="employee_code" required className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500" />
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Employee Code</label>
+                    <input 
+                      type="text" 
+                      name="employee_code" 
+                      placeholder="Auto-generated if left blank" 
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-blue-500 bg-white" 
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Status *</label>

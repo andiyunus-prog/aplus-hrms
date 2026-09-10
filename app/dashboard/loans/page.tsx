@@ -1,15 +1,16 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '../../../utils/supabase/server'
-import { requestLoan, updateLoanStatus } from './actions'
+import { requestLoan, updateLoanStatus, deleteLoan } from './actions'
 import Link from 'next/link'
 import { requireOwnerPage } from '../../../utils/supabase/auth'
 import { getCurrentUserRole } from '../../../utils/supabase/auth'
 import { redirect } from 'next/navigation'
 
 export default async function LoansPage() {
-  await requireOwnerPage() // <-- SECURED WITH ONE CLEAN LINE
-// SECURITY GUARD: Lock out regular employees
+  await requireOwnerPage()
+
+  // SECURITY GUARD: Lock out regular employees
   const userRole = await getCurrentUserRole()
   const isRegularEmployee = !['OWNER', 'ADMIN', 'HRD', 'HR', 'HR_ADMIN'].includes(userRole || '')
 
@@ -54,8 +55,8 @@ export default async function LoansPage() {
 
       {/* Request Loan Form */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Request New Loan</h2>
-        <form action={requestLoan} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">Request / Manual Loan Entry</h2>
+        <form action={requestLoan} className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Employee</label>
             <select name="employee_id" required className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white">
@@ -79,13 +80,32 @@ export default async function LoansPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Purpose</label>
+            <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Request / Receipt Date</label>
+            <input 
+              type="date" 
+              name="created_at" 
+              defaultValue={new Date().toISOString().split('T')[0]} 
+              required 
+              className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white" 
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 uppercase mb-1">Purpose / Notes</label>
             <input type="text" name="purpose" placeholder="e.g. Medical / Emergency" className="w-full border border-gray-300 rounded-md p-2 text-sm" />
           </div>
 
-          <div className="md:col-span-4 flex justify-end">
+          <div className="md:col-span-5 flex justify-between items-center pt-2">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-600 font-medium">Initial Status:</label>
+              <select name="status" defaultValue="PENDING" className="border border-gray-300 rounded p-1 text-xs bg-white">
+                <option value="PENDING">PENDING (Requires Approval)</option>
+                <option value="APPROVED">APPROVED (Direct Disbursed)</option>
+              </select>
+            </div>
+
             <button type="submit" className="bg-blue-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors">
-              Submit Loan Request
+              Submit Loan Entry
             </button>
           </div>
         </form>
@@ -102,6 +122,7 @@ export default async function LoansPage() {
               <th className="px-6 py-3">Employee</th>
               <th className="px-6 py-3">Amount</th>
               <th className="px-6 py-3">Tenor / Installment</th>
+              <th className="px-6 py-3">Request Date</th>
               <th className="px-6 py-3">Purpose</th>
               <th className="px-6 py-3">Status</th>
               <th className="px-6 py-3 text-right">Actions</th>
@@ -111,6 +132,8 @@ export default async function LoansPage() {
             {loans && loans.length > 0 ? (
               loans.map((loan) => {
                 const emp = employeeMap.get(loan.employee_id)
+                const requestDateStr = loan.created_at ? new Date(loan.created_at).toLocaleDateString('id-ID') : '-'
+
                 return (
                   <tr key={loan.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 font-medium text-gray-900">
@@ -124,6 +147,9 @@ export default async function LoansPage() {
                     </td>
                     <td className="px-6 py-4 text-gray-600">
                       {loan.tenor_months} Mos (~Rp {Number(loan.monthly_installment).toLocaleString('id-ID')}/mo)
+                    </td>
+                    <td className="px-6 py-4 text-gray-600 text-xs font-mono">
+                      {requestDateStr}
                     </td>
                     <td className="px-6 py-4 text-gray-500">
                       {loan.purpose || '-'}
@@ -141,10 +167,16 @@ export default async function LoansPage() {
                     <td className="px-6 py-4 text-right space-x-1 whitespace-nowrap">
                       {/* PENDING ACTIONS */}
                       {loan.status === 'PENDING' && (
-                        <>
-                          <form action={updateLoanStatus} className="inline">
+                        <div className="inline-flex items-center gap-1">
+                          <form action={updateLoanStatus} className="inline-flex items-center gap-1">
                             <input type="hidden" name="id" value={loan.id} />
                             <input type="hidden" name="status" value="APPROVED" />
+                            <input 
+                              type="date" 
+                              name="approval_date" 
+                              defaultValue={new Date().toISOString().split('T')[0]} 
+                              className="text-xs border border-gray-300 rounded p-1 bg-white" 
+                            />
                             <button type="submit" className="text-xs bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded font-medium hover:bg-green-100">
                               Approve
                             </button>
@@ -156,7 +188,7 @@ export default async function LoansPage() {
                               Reject
                             </button>
                           </form>
-                        </>
+                        </div>
                       )}
 
                       {/* APPROVED ACTIONS */}
@@ -171,16 +203,27 @@ export default async function LoansPage() {
                       )}
 
                       {/* SCHEDULE LINK */}
-                      <Link href={`/dashboard/loans/${loan.id}`} className="text-xs bg-gray-50 text-gray-700 border border-gray-200 px-2.5 py-1 rounded font-medium hover:bg-gray-100 inline-block">
+                      <Link href={`/dashboard/loans/${loan.id}`} className="text-xs bg-gray-50 text-gray-700 border border-gray-200 px-2.5 py-1 rounded font-medium hover:bg-gray-100 inline-block ml-1">
                         Schedule &rarr;
                       </Link>
+
+                      {/* DELETE LOAN ACTION */}
+                      <form action={deleteLoan} className="inline ml-1">
+                        <input type="hidden" name="id" value={loan.id} />
+                        <button 
+                          type="submit" 
+                          className="text-xs bg-red-50 text-red-600 border border-red-200 px-2.5 py-1 rounded font-medium hover:bg-red-100 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </form>
                     </td>
                   </tr>
                 )
               })
             ) : (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={7} className="px-6 py-8 text-center text-gray-400">
                   No loan requests found in database.
                 </td>
               </tr>

@@ -57,8 +57,8 @@ export default async function ResignedEmployeesPage() {
                   </td>
                   <td className="p-3 text-gray-600">{emp.department || '-'}</td>
                   <td className="p-3 text-gray-600">{emp.hire_date || '-'}</td>
-                  <td className="p-3 font-medium text-red-600">{emp.resignation_date || '-'}</td>
-                  <td className="p-3 text-gray-500 text-xs">{emp.resignation_reason || 'Resigned'}</td>
+                  <td className="p-3 font-medium text-red-600">{emp.resign_date || '-'}</td>
+                  <td className="p-3 text-gray-500 text-xs">{emp.notes || 'Resigned'}</td>
                   <td className="p-3 text-right">
                     <form action={rehireEmployee} className="inline-flex items-center gap-2">
                       <input type="hidden" name="employee_id" value={emp.id} />
