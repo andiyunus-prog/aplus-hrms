@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { addPayslipItem, deletePayslipItem, markAsPaid, applyOvertime } from './actions'
 import { requireOwnerPage } from '../../../../utils/supabase/auth'
+import ExportExcelButton from '../export-excel-button'
 
 type SalaryComponentOption = {
   id: string
@@ -112,6 +113,7 @@ export default async function PayslipDetailPage({
 
   const monthShort = getMonthName(payslip.period_month)
   const yearShort = String(payslip.period_year).slice(-2)
+  const periodFull = `${getMonthName(payslip.period_month)} ${payslip.period_year}`
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-6">
@@ -127,10 +129,10 @@ export default async function PayslipDetailPage({
         </span>
       </div>
 
-      {/* Header Info */}
+      {/* Header Info & Actions */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Payslip: {getMonthName(payslip.period_month)} {payslip.period_year}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Payslip: {periodFull}</h1>
           <p className="text-gray-500 mt-1">
             <span className="font-medium text-gray-700">{payslip.employees?.full_name}</span> • 
             Code: {payslip.employees?.employee_code} • 
@@ -138,14 +140,27 @@ export default async function PayslipDetailPage({
           </p>
         </div>
         
-        {!isPaid && (
-          <form action={markAsPaid}>
-            <input type="hidden" name="id" value={payslip.id} />
-            <button type="submit" className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2.5 rounded-md transition-colors shadow-sm">
-              Mark as PAID
-            </button>
-          </form>
-        )}
+        <div className="flex items-center gap-3">
+          <ExportExcelButton 
+            employeeName={payslip.employees?.full_name || 'Employee'}
+            employeeCode={payslip.employees?.employee_code || 'EMP'}
+            period={periodFull}
+            basicSalary={baseSalaryNum}
+            allowances={totalEarningsNum}
+            loanDeduction={manualDeductionsTotal}
+            otherDeductions={latenessDeductionAmount}
+            netSalary={calculatedNetSalary}
+          />
+
+          {!isPaid && (
+            <form action={markAsPaid}>
+              <input type="hidden" name="id" value={payslip.id} />
+              <button type="submit" className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2 rounded-md transition-colors shadow-sm text-xs">
+                Mark as PAID
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -339,7 +354,7 @@ export default async function PayslipDetailPage({
                     </div>
                   )}
 
-                  {/* DEDUCTION COMPONENT DROPDOWN FORM (e.g. BPJS Kesehatan) */}
+                  {/* DEDUCTION COMPONENT DROPDOWN FORM */}
                   <form action={addPayslipItem} className="flex gap-2">
                     <input type="hidden" name="payslip_id" value={payslip.id} />
                     <input type="hidden" name="type" value="DEDUCTION" />
