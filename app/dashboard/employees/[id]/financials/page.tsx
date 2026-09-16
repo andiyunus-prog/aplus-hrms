@@ -10,7 +10,7 @@ type Props = {
 }
 
 export default async function EmployeeFinancialProfilePage({ params }: Props) {
-  await requireOwnerPage() // <-- SECURED: BLOCKS HRD USERS INSTANTLY
+  await requireOwnerPage()
 
   const { id } = await params
   const supabase = await createClient()
@@ -26,7 +26,14 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
     return <div className="p-8">Employee not found.</div>
   }
 
-  // 2. Fetch Active Default Components & Available Company Salary Components
+  // 2. Fetch Employee's Base Salary from employee_salaries table
+  const { data: salaryRecord } = await supabase
+    .from('employee_salaries')
+    .select('base_salary')
+    .eq('employee_id', id)
+    .single()
+
+  // 3. Fetch Active Default Components & Available Company Salary Components
   const { data: defaultComponents } = await supabase
     .from('employee_default_components')
     .select(`
@@ -42,7 +49,7 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
     .eq('company_id', employee.company_id)
     .order('name')
 
-  // 3. Fetch All Loans for this Employee
+  // 4. Fetch All Loans for this Employee
   const { data: loans } = await supabase
     .from('employee_loans')
     .select('*')
@@ -51,7 +58,7 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
 
   const loanIds = loans?.map(l => l.id) || []
 
-  // 4. Fetch All Installments for these Loans
+  // 5. Fetch All Installments for these Loans
   let installments: any[] = []
   if (loanIds.length > 0) {
     const { data: instData } = await supabase
@@ -61,7 +68,7 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
     installments = instData || []
   }
 
-  // 5. Fetch Payslip History
+  // 6. Fetch Payslip History
   const { data: payslips } = await supabase
     .from('payslips')
     .select(`
@@ -72,12 +79,26 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
     .order('period_year', { ascending: false })
     .order('period_month', { ascending: false })
 
-  // --- ACCURATE CALCULATIONS ---
+  // --- BASE SALARY VALUE RESOLUTION ---
+  const directBaseSalary = Number(salaryRecord?.base_salary || 0)
+  
+  // Fallback check if not found in employee_salaries
+  const baseSalaryPreset = defaultComponents?.find((item: any) => {
+    const name = item.salary_components?.name?.toLowerCase() || ''
+    return name.includes('base salary') || name.includes('gaji pokok')
+  })
+  
+  const latestPayslipBase = payslips && payslips.length > 0 ? Number(payslips[0].base_salary || 0) : 0
+
+  const finalBaseSalary = directBaseSalary > 0 
+    ? directBaseSalary 
+    : (baseSalaryPreset ? Number(baseSalaryPreset.default_amount) : latestPayslipBase)
+
+  // --- LOAN CALCULATIONS ---
   const activeOrDisbursedLoans = loans?.filter(l => l.status === 'APPROVED' || l.status === 'DISBURSED') || []
   const activeOrDisbursedLoanIds = new Set(activeOrDisbursedLoans.map(l => l.id))
 
   const totalLoanBorrowed = activeOrDisbursedLoans.reduce((acc, l) => acc + Number(l.amount), 0)
-
   const activeInstallments = installments.filter(i => activeOrDisbursedLoanIds.has(i.loan_id))
 
   const totalLoanLeft = activeInstallments
@@ -101,7 +122,7 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{employee.full_name}</h1>
-            <p className="text-sm text-gray-500">Code: {employee.employee_code} | Department: {employee.department || '-'} | Position: {employee.position || '-'}</p>
+            <p className="text-sm text-gray-500">Code: {employee.employee_code} | Department: {employee.department || '-'} | Position: {employee.job_position || employee.position || '-'}</p>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
             employee.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
@@ -115,7 +136,14 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
           <span className="text-xs font-medium text-gray-400 uppercase">Base Salary</span>
-          <p className="text-xl font-bold text-gray-900 mt-1">Rp {Number(employee.base_salary || 0).toLocaleString('id-ID')}</p>
+          <p className="text-xl font-bold text-gray-900 mt-1">
+            Rp {finalBaseSalary.toLocaleString('id-ID')}
+          </p>
+          {finalBaseSalary === 0 && (
+            <Link href="/dashboard/payroll/salaries" className="text-[10px] text-blue-600 hover:underline block mt-1">
+              + Set base salary in Salaries page
+            </Link>
+          )}
         </div>
         <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
           <span className="text-xs font-medium text-gray-400 uppercase">Total Approved Loans</span>
@@ -131,7 +159,7 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
         </div>
       </div>
 
-      {/* Recurring Salary Presets Section (BPJS / Tunjangan) */}
+      {/* Recurring Salary Presets Section */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-6">
         <div className="border-b pb-3">
           <h3 className="text-lg font-semibold text-gray-800">Recurring Salary Presets</h3>
@@ -264,7 +292,6 @@ export default async function EmployeeFinancialProfilePage({ params }: Props) {
                     </div>
                   </div>
 
-                  {/* Sub-table for installments */}
                   {loanInsts.length > 0 && (
                     <div className="bg-white rounded border border-gray-200 overflow-hidden">
                       <table className="w-full text-left text-xs">
